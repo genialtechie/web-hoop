@@ -8,11 +8,11 @@ export class Hoop {
 
     // Configuration with defaults
     this.config = {
-      position: options.position || { x: 0, y: 3.05, z: -5 }, // Regulation height is 3.05m (10 feet)
-      rimRadius: options.rimRadius || 0.225, // 45cm diameter
-      rimTubeRadius: options.rimTubeRadius || 0.025, // 5cm tube diameter
-      backboardWidth: options.backboardWidth || 1.8, // 180cm width
-      backboardHeight: options.backboardHeight || 1.05, // 105cm height
+      position: options.position || { x: 0, y: 3.05, z: -4 }, // Moved closer (from -5 to -4)
+      rimRadius: options.rimRadius || 0.4, // 80cm diameter
+      rimTubeRadius: options.rimTubeRadius || 0.05, // 10cm tube diameter
+      backboardWidth: options.backboardWidth || 2.4, // Increased from 1.8m to 2.4m width
+      backboardHeight: options.backboardHeight || 1.35, // Increased from 1.05m to 1.35m height
       backboardThickness: options.backboardThickness || 0.05, // 5cm thickness
       backboardDistFromRim: options.backboardDistFromRim || 0.15, // 15cm from rim center to backboard
       netHeight: options.netHeight || 0.4, // 40cm net height
@@ -50,98 +50,117 @@ export class Hoop {
   }
 
   createRim() {
-    // Create a torus for the rim
-    const geometry = new THREE.TorusGeometry(
-      this.config.rimRadius,
-      this.config.rimTubeRadius,
-      16,
-      32,
-    );
+    const { rimRadius, rimTubeRadius } = this.config;
 
-    // Create material
+    // Create a torus for the visual rim
+    const geometry = new THREE.TorusGeometry(rimRadius, rimTubeRadius, 16, 32);
     const material = new THREE.MeshStandardMaterial({
-      color: 0xff4500, // Orange-red color
+      color: 0xff4500,
       metalness: 0.8,
       roughness: 0.3,
     });
 
     // Create mesh
     const rimMesh = new THREE.Mesh(geometry, material);
-
-    // Rotate the rim to be horizontal (facing up)
     rimMesh.rotation.x = Math.PI / 2;
-
-    // Add to group
     this.group.add(rimMesh);
-
-    // Add physics to the rim
-    // eslint-disable-next-line no-unused-vars
-    const rimBody = this.physics.add.existing(rimMesh, {
-      shape: "concave",
-      mass: 0, // Static body
-      collisionFlags: 1, // Static body
-    });
-
-    // Store reference
     this.rim = rimMesh;
+
+    // Create a single compounded physics rim using the group's position
+    const pos = this.config.position;
+
+    // Create a ring of spheres for the rim physics that stays in place
+    const numSegments = 12;
+    for (let i = 0; i < numSegments; i++) {
+      const angle = (i / numSegments) * Math.PI * 2;
+      const x = pos.x + rimRadius * Math.cos(angle);
+      const y = pos.y;
+      const z = pos.z + rimRadius * Math.sin(angle);
+
+      // Create physics sphere
+      const ball = this.physics.add.sphere(
+        {
+          radius: rimTubeRadius,
+          x: x,
+          y: y,
+          z: z,
+          mass: 0,
+          collisionFlags: 1,
+          friction: 0.3,
+          restitution: 0.7,
+        },
+        {
+          phong: {
+            color: 0xff4500,
+            opacity: 0,
+            transparent: true,
+          },
+        },
+      );
+
+      // Make the sphere invisible but keep physics
+      ball.visible = false;
+    }
 
     return rimMesh;
   }
 
   createBackboard() {
-    // Create backboard
-    const geometry = new THREE.BoxGeometry(
-      this.config.backboardWidth,
-      this.config.backboardHeight,
-      this.config.backboardThickness,
+    const pos = this.config.position;
+    const {
+      backboardWidth,
+      backboardHeight,
+      backboardThickness,
+      backboardDistFromRim,
+      rimRadius,
+    } = this.config;
+
+    // Calculate the absolute position of the backboard
+    const backboardX = pos.x;
+    const backboardY = pos.y + (backboardHeight / 2 - rimRadius);
+    const backboardZ = pos.z - backboardDistFromRim - backboardThickness / 2;
+
+    // Create backboard with direct physics at the absolute position
+    const backboardBody = this.physics.add.box(
+      {
+        width: backboardWidth,
+        height: backboardHeight,
+        depth: backboardThickness,
+        x: backboardX,
+        y: backboardY,
+        z: backboardZ,
+        mass: 0,
+        collisionFlags: 1,
+        friction: 0.8,
+        restitution: 0.6,
+        metalness: 0.4,
+        roughness: 0.2,
+      },
+      {
+        phong: {
+          color: 0xffffff,
+        },
+      },
     );
 
-    // Create a semi-transparent material for the backboard
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff, // White
-      transparent: true,
-      opacity: 0.7,
-      metalness: 0.1,
-      roughness: 0.2,
-    });
-
-    // Create mesh
-    const backboardMesh = new THREE.Mesh(geometry, material);
-
-    // Position the backboard relative to the rim (behind it)
-    backboardMesh.position.z =
-      -this.config.backboardDistFromRim - this.config.backboardThickness / 2;
-    backboardMesh.position.y =
-      this.config.backboardHeight / 2 - this.config.rimRadius;
-
-    // Add to group
-    this.group.add(backboardMesh);
-
-    // Add physics to the backboard
-    // eslint-disable-next-line no-unused-vars
-    const backboardBody = this.physics.add.existing(backboardMesh, {
-      shape: "box",
-      mass: 0, // Static body
-      collisionFlags: 1, // Static body
-    });
-
     // Store reference
-    this.backboard = backboardMesh;
+    this.backboard = backboardBody;
+
+    // Don't add to group - it would double-transform
+    // Instead, manually position the visual elements
 
     // Add the square on the backboard
     this.createBackboardSquare();
 
-    return backboardMesh;
+    return backboardBody;
   }
 
   createBackboardSquare() {
+    if (!this.backboard) return null;
+
     // Create a square outline on the backboard
     const squareWidth = 0.59; // 59cm width
     const squareHeight = 0.45; // 45cm height
-    // eslint-disable-next-line no-unused-vars
-    const lineWidth = 0.02; // 2cm line width
-
-    // Create lines for the square
     const material = new THREE.LineBasicMaterial({
       color: 0xff0000,
       linewidth: 2,
@@ -229,7 +248,7 @@ export class Hoop {
     const triggerMesh = new THREE.Mesh(geometry, material);
 
     // Position the trigger zone below the rim
-    triggerMesh.position.y = -0.1;
+    triggerMesh.position.y = -0.05; // Moved closer to the rim (was -0.1)
 
     // Add to rim
     this.rim.add(triggerMesh);
@@ -255,7 +274,7 @@ export class Hoop {
         ballLocalPos.x * ballLocalPos.x + ballLocalPos.z * ballLocalPos.z,
       ) <
       this.config.rimRadius * 0.8;
-    const isWithinHeight = Math.abs(ballLocalPos.y) < 0.1;
+    const isWithinHeight = Math.abs(ballLocalPos.y) < 0.15; // Increased detection height (was 0.1)
 
     return isWithinRadius && isWithinHeight;
   }

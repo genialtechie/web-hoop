@@ -11,7 +11,6 @@ export class Basketball {
       radius: options.radius || 0.24, // 24cm - regulation basketball size
       mass: options.mass || 0.6, // 600g - regulation basketball weight
       position: options.position || { x: 0, y: 1, z: 0 },
-      restitution: options.restitution || 0.8, // High bounce
       friction: options.friction || 0.5,
       color: options.color || 0xf85e00, // Orange
     };
@@ -27,8 +26,7 @@ export class Basketball {
 
   create() {
     // Create the basketball using the physics factory
-    const { radius, mass, position, restitution, friction, color } =
-      this.config;
+    const { radius, mass, position, color } = this.config;
 
     // Create the ball with physics
     const ball = this.physics.add.sphere(
@@ -37,9 +35,12 @@ export class Basketball {
         x: position.x,
         y: position.y,
         z: position.z,
-        mass,
-        restitution,
-        friction,
+        mass: mass * 0.8, // Slightly lighter for better control
+        restitution: 0.85, // More bounce
+        friction: 0.6, // More friction for better interaction
+        collisionFlags: 0, // DYNAMIC object
+        angularDamping: 0.5, // More angular damping for stability
+        linearDamping: 0.3, // Less linear damping for better movement
       },
       {
         phong: {
@@ -49,6 +50,11 @@ export class Basketball {
         },
       },
     );
+
+    // Set basic physics properties
+    ball.body.setBounciness(0.85);
+    ball.body.setFriction(0.6);
+    ball.needUpdate = true;
 
     // Enable shadows
     ball.castShadow = true;
@@ -102,19 +108,26 @@ export class Basketball {
    * Reset the basketball to the starting position
    */
   reset(position = null) {
-    if (this.body) {
+    if (this.body && this.mesh) {
       // If position is provided, use it, otherwise use the default
       const resetPos = position || this.config.position;
 
-      // Reset the position
-      this.body.position.set(resetPos.x, resetPos.y, resetPos.z);
+      try {
+        // Remove the existing basketball from the scene and physics world
+        this.physics.destroy(this.mesh);
+        this.scene.remove(this.mesh);
 
-      // Reset the velocity and angular velocity
-      this.body.setVelocity(0, 0, 0);
-      this.body.setAngularVelocity(0, 0, 0);
+        // Update the position in config
+        this.config.position = resetPos;
 
-      // Mark the ball as reset
-      this.isReset = true;
+        // Create a new basketball
+        this.create();
+
+        // Mark the ball as reset
+        this.isReset = true;
+      } catch (error) {
+        console.error("Error resetting basketball:", error);
+      }
     }
   }
 

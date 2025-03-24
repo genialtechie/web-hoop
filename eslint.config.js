@@ -16,7 +16,7 @@ export default [
       "prettier/prettier": [
         "error",
         {
-          arrowParens: "avoid",
+          arrowParens: "always",
           singleQuote: false,
         },
       ],
