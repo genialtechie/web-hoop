@@ -4,6 +4,8 @@ import { Basketball } from "./Basketball.js";
 import { Hoop } from "./Hoop.js";
 import { InputManager } from "./InputManager.js";
 import { delay } from "../utils/helpers.js";
+import { SoundManager } from "../utils/SoundManager.js";
+import { EffectsManager } from "../utils/EffectsManager.js";
 
 export class Game {
   constructor() {
@@ -20,6 +22,9 @@ export class Game {
     this.basketball = null;
     this.hoop = null;
     this.inputManager = null;
+    this.soundManager = null;
+    this.effectsManager = null;
+    this.ballTrail = null;
 
     // Game state
     this.isInitialized = false;
@@ -68,10 +73,31 @@ export class Game {
   // Update the score display
   updateScoreDisplay() {
     if (this.scoreElement) {
+      let streakEmoji = "";
+      let streakClass = "";
+
+      if (this.streak >= 5) {
+        streakEmoji = "🔥🔥🔥";
+        streakClass = "streak-fire";
+      } else if (this.streak >= 3) {
+        streakEmoji = "🔥🔥";
+        streakClass = "streak-hot";
+      } else if (this.streak > 1) {
+        streakEmoji = "🔥";
+        streakClass = "streak-warm";
+      }
+
       this.scoreElement.innerHTML = `
-        <div>Score: ${this.score}</div>
-        <div>High Score: ${this.highScore}</div>
-        ${this.streak > 1 ? `<div>Streak: ${this.streak} 🔥</div>` : ""}
+        <div class="score-main">Score: <span class="score-value">${this.score}</span></div>
+        <div class="high-score">Best: ${this.highScore}</div>
+        ${
+          this.streak > 1
+            ? `<div class="streak ${streakClass}">
+            <span class="streak-label">STREAK</span>
+            <span class="streak-value">${this.streak}x ${streakEmoji}</span>
+          </div>`
+            : ""
+        }
       `;
     }
   }
@@ -98,8 +124,8 @@ export class Game {
       0.1,
       1000,
     );
-    this.camera.position.set(0, 2.5, 6); // Reset to standard view position
-    this.camera.lookAt(0, 2, -2); // Look slightly up towards the hoop
+    this.camera.position.set(0, 2.5, 4); // Moved closer to the hoop
+    this.camera.lookAt(0, 2.5, -3); // Look towards the hoop
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -149,6 +175,19 @@ export class Game {
     // Create input manager for swipe controls
     this.setupInputManager();
 
+    // Initialize sound and effects managers
+    this.soundManager = new SoundManager();
+    this.effectsManager = new EffectsManager(this.scene);
+
+    // Initialize sound on first user interaction
+    window.addEventListener(
+      "click",
+      () => {
+        if (this.soundManager) this.soundManager.init();
+      },
+      { once: true },
+    );
+
     // Start game loop after physics is initialized
     this.isInitialized = true;
     this.update();
@@ -190,17 +229,171 @@ export class Game {
         depth: 1,
         restitution: 0.95, // Increased from 0.9 to 0.95 for better bounce
       },
-      { phong: { color: 0x2e8b57, transparent: true, opacity: 0.8 } },
+      { phong: { color: 0xc19a6b, transparent: false, opacity: 1 } }, // Wood color
     );
 
-    // set bounciness
+    // Set bounciness
     ground.body.setBounciness(1);
+
+    // Add court markings
+    this.addCourtMarkings();
+  }
+
+  addCourtMarkings() {
+    const lineHeight = 0.05;
+    const lineWidth = 0.1;
+    const yPosition = 0.55;
+
+    // Bright white material
+    const lineMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+    });
+
+    // Dark wood stripes
+    const darkWoodMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5c3a1e,
+    });
+
+    // Paint/Key area dimensions
+    const freeThrowCircleRadius = 1.7;
+    const keyWidth = freeThrowCircleRadius * 2; // Width matches circle diameter
+    const courtEdgeZ = -10; // Edge of the court (baseline)
+    const baselineZ = courtEdgeZ; // Baseline at court edge
+    const freeThrowLineZ = baselineZ + 5.8; // Free throw line distance from baseline
+    const keyDepth = freeThrowLineZ - baselineZ;
+
+    // Baseline (under the hoop)
+    const baseline = new THREE.Mesh(
+      new THREE.BoxGeometry(keyWidth, lineHeight, lineWidth),
+      lineMaterial,
+    );
+    baseline.position.set(0, yPosition, baselineZ);
+    this.scene.add(baseline);
+
+    // Key area - left vertical line
+    const leftKeyLine = new THREE.Mesh(
+      new THREE.BoxGeometry(lineWidth, lineHeight, keyDepth),
+      lineMaterial,
+    );
+    leftKeyLine.position.set(
+      -keyWidth / 2,
+      yPosition,
+      baselineZ + keyDepth / 2,
+    );
+    this.scene.add(leftKeyLine);
+
+    // Key area - right vertical line
+    const rightKeyLine = new THREE.Mesh(
+      new THREE.BoxGeometry(lineWidth, lineHeight, keyDepth),
+      lineMaterial,
+    );
+    rightKeyLine.position.set(
+      keyWidth / 2,
+      yPosition,
+      baselineZ + keyDepth / 2,
+    );
+    this.scene.add(rightKeyLine);
+
+    // Free throw line (top of the key)
+    const freeThrowLine = new THREE.Mesh(
+      new THREE.BoxGeometry(keyWidth, lineHeight, lineWidth),
+      lineMaterial,
+    );
+    freeThrowLine.position.set(0, yPosition, freeThrowLineZ);
+    this.scene.add(freeThrowLine);
+
+    // Free throw circle (top of key) - diameter matches key width
+    const freeThrowCircle = new THREE.Mesh(
+      new THREE.RingGeometry(
+        freeThrowCircleRadius,
+        freeThrowCircleRadius + 0.1,
+        64,
+      ),
+      lineMaterial,
+    );
+    freeThrowCircle.rotation.x = -Math.PI / 2;
+    freeThrowCircle.position.set(0, yPosition + 0.01, freeThrowLineZ);
+    this.scene.add(freeThrowCircle);
+
+    // Three-point arc (centered to align with court edge and intersect with free throw circle)
+    const threePtRadius = 3.775; // Adjusted to intersect with top of free throw circle
+    const threePtSegments = 48;
+
+    // Calculate the center of the three-point arc so it's flush with court edge
+    const threePtCenterZ = courtEdgeZ + threePtRadius;
+
+    const threePtStartAngle = 0; // Start at 0 degrees (facing player, right side)
+    const threePtEndAngle = Math.PI; // End at 180 degrees (facing player, left side)
+
+    for (let i = 0; i < threePtSegments; i++) {
+      const angle1 =
+        threePtStartAngle +
+        (i / threePtSegments) * (threePtEndAngle - threePtStartAngle);
+      const angle2 =
+        threePtStartAngle +
+        ((i + 1) / threePtSegments) * (threePtEndAngle - threePtStartAngle);
+
+      const x1 = Math.cos(angle1) * threePtRadius;
+      const z1 = threePtCenterZ + Math.sin(angle1) * threePtRadius;
+      const x2 = Math.cos(angle2) * threePtRadius;
+      const z2 = threePtCenterZ + Math.sin(angle2) * threePtRadius;
+
+      const segmentLength = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+      const segmentAngle = Math.atan2(z2 - z1, x2 - x1);
+
+      const arcSegment = new THREE.Mesh(
+        new THREE.BoxGeometry(segmentLength, lineHeight, lineWidth),
+        lineMaterial,
+      );
+      arcSegment.position.set((x1 + x2) / 2, yPosition, (z1 + z2) / 2);
+      arcSegment.rotation.y = -segmentAngle;
+      this.scene.add(arcSegment);
+    }
+
+    // Three-point straight lines from arc to court edge (left and right)
+    const threePtSideLength = Math.abs(courtEdgeZ - threePtCenterZ);
+
+    // Left three-point line
+    const leftThreePtLine = new THREE.Mesh(
+      new THREE.BoxGeometry(lineWidth, lineHeight, threePtSideLength),
+      lineMaterial,
+    );
+    leftThreePtLine.position.set(
+      -threePtRadius,
+      yPosition,
+      courtEdgeZ + threePtSideLength / 2,
+    );
+    this.scene.add(leftThreePtLine);
+
+    // Right three-point line
+    const rightThreePtLine = new THREE.Mesh(
+      new THREE.BoxGeometry(lineWidth, lineHeight, threePtSideLength),
+      lineMaterial,
+    );
+    rightThreePtLine.position.set(
+      threePtRadius,
+      yPosition,
+      courtEdgeZ + threePtSideLength / 2,
+    );
+    this.scene.add(rightThreePtLine);
+
+    // Wood grain planks
+    for (let i = -10; i <= 10; i += 1.2) {
+      const plank = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, lineHeight * 0.5, 20),
+        darkWoodMaterial,
+      );
+      plank.position.set(i, yPosition - 0.02, 0);
+      this.scene.add(plank);
+    }
+
+    console.log("Full court markings added");
   }
 
   createGameObjects() {
     // Create the basketball
     this.basketball = new Basketball(this.physics, this.scene, {
-      position: { x: 0, y: 1.5, z: 2 }, // Matching reset position
+      position: { x: 0, y: 1.5, z: 0 }, // Moved closer to the hoop
     });
 
     // Create the hoop and backboard
@@ -267,6 +460,16 @@ export class Game {
         // Hide the trajectory line
         this.inputManager.hideTrajectoryLine();
 
+        // Play release sound
+        if (this.soundManager) this.soundManager.playRelease();
+
+        // Create ball trail effect
+        if (this.effectsManager) {
+          this.ballTrail = this.effectsManager.createBallTrail(
+            this.basketball.mesh,
+          );
+        }
+
         console.log("Shot taken with force:", modifiedForce);
       }
     }
@@ -284,6 +487,19 @@ export class Game {
       // Update game objects
       if (this.basketball) this.basketball.update();
       if (this.hoop) this.hoop.update();
+
+      // Update effects
+      if (this.effectsManager) {
+        this.effectsManager.update(delta);
+
+        // Update ball trail during flight
+        if (this.ballTrail && this.gameState === "SHOOTING") {
+          this.effectsManager.updateBallTrail(
+            this.ballTrail,
+            this.basketball.getPosition(),
+          );
+        }
+      }
 
       // Check for basket made
       this.checkForBasket();
@@ -332,8 +548,32 @@ export class Game {
         // Schedule a reset after a short delay
         this.pendingReset = true;
 
-        // Play success sound or visual effect
+        // Play success sound and visual effects
         this.showScoreEffect();
+
+        // Play score sound
+        if (this.soundManager) {
+          this.soundManager.playSwish();
+          this.soundManager.playScore(this.streak);
+        }
+
+        // Create visual effects
+        if (this.effectsManager) {
+          const hoopPos = new THREE.Vector3(0, 3.05, -5);
+          this.effectsManager.createScoreExplosion(hoopPos);
+
+          // Extra effects for streaks
+          if (this.streak >= 3) {
+            this.effectsManager.createConfetti(hoopPos, this.streak);
+            this.effectsManager.createHoopGlow(hoopPos, this.streak);
+          }
+        }
+
+        // Clear ball trail
+        if (this.ballTrail && this.effectsManager) {
+          this.effectsManager.clearBallTrail(this.ballTrail);
+          this.ballTrail = null;
+        }
 
         setTimeout(() => {
           if (this.gameState === "SCORED") {
@@ -348,7 +588,7 @@ export class Game {
   resetBasketball() {
     try {
       console.log("Resetting basketball after score...");
-      this.basketball.reset({ x: 0, y: 1.5, z: 2 }); // Closer reset position
+      this.basketball.reset({ x: 0, y: 1.5, z: 0 }); // Moved closer to the hoop
       this.gameState = "IDLE";
     } catch (error) {
       console.error("Error during reset after score:", error);
@@ -424,12 +664,21 @@ export class Game {
         // Update the score display to show the reset streak
         this.updateScoreDisplay();
 
+        // Play miss sound
+        if (this.soundManager) this.soundManager.playMiss();
+
+        // Clear ball trail
+        if (this.ballTrail && this.effectsManager) {
+          this.effectsManager.clearBallTrail(this.ballTrail);
+          this.ballTrail = null;
+        }
+
         // Reset the ball after a shorter delay
         delay(this.resetDelay).then(() => {
           if (this.basketball) {
             try {
               console.log("Resetting basketball...");
-              this.basketball.reset({ x: 0, y: 1.5, z: 2 }); // Closer reset position
+              this.basketball.reset({ x: 0, y: 1.5, z: 0 }); // Moved closer to the hoop
               this.gameState = "IDLE";
             } catch (error) {
               console.error("Error during reset:", error);
@@ -467,6 +716,9 @@ export class Game {
     if (this.basketball) this.basketball.dispose();
     if (this.hoop) this.hoop.dispose();
     if (this.inputManager) this.inputManager.dispose();
+
+    // Dispose of effects manager
+    if (this.effectsManager) this.effectsManager.dispose();
 
     // Dispose of physics
     if (this.physics) {

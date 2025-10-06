@@ -189,40 +189,122 @@ export class Hoop {
   }
 
   createNet() {
-    // Create a simple representation of a net
-    // In a complete implementation, this could be a cloth simulation
+    // Create a realistic basketball net with rope-like strands
+    const netGroup = new THREE.Group();
 
-    // Create a conical mesh to represent the net
-    const geometry = new THREE.ConeGeometry(
-      this.config.rimRadius,
-      this.config.netHeight,
-      16,
-      1,
-      true, // Open ended
-    );
+    const { rimRadius, netHeight } = this.config;
+    const numVerticalStrands = 24; // Number of vertical rope strands
+    const numHorizontalLoops = 8; // Number of horizontal connecting loops
+    const bottomRadius = rimRadius * 0.6; // Net tapers to 60% of rim radius
 
-    // Create material - white, transparent mesh
-    const material = new THREE.MeshBasicMaterial({
+    // Material for the net strands - white rope-like appearance
+    const strandMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      transparent: true,
-      opacity: 0.5,
-      wireframe: true,
+      roughness: 0.8,
+      metalness: 0.1,
       side: THREE.DoubleSide,
     });
 
-    // Create mesh
-    const netMesh = new THREE.Mesh(geometry, material);
+    // Create vertical strands
+    // Note: The rim is rotated 90 degrees, so we need to use Z-axis for "down"
+    for (let i = 0; i < numVerticalStrands; i++) {
+      const angle = (i / numVerticalStrands) * Math.PI * 2;
 
-    // Position the net below the rim
-    netMesh.position.y = -this.config.netHeight / 2;
+      // Create a curve for the strand (slightly curved outward)
+      // Using positive Z-axis to hang downward since rim is rotated
+      const curve = new THREE.CatmullRomCurve3([
+        // Start at rim
+        new THREE.Vector3(
+          rimRadius * Math.cos(angle),
+          rimRadius * Math.sin(angle),
+          0,
+        ),
+        // Middle point (slightly outward bulge)
+        new THREE.Vector3(
+          rimRadius * 1.05 * Math.cos(angle),
+          rimRadius * 1.05 * Math.sin(angle),
+          netHeight * 0.3,
+        ),
+        // Lower middle
+        new THREE.Vector3(
+          rimRadius * 0.85 * Math.cos(angle),
+          rimRadius * 0.85 * Math.sin(angle),
+          netHeight * 0.65,
+        ),
+        // Bottom (tapered)
+        new THREE.Vector3(
+          bottomRadius * Math.cos(angle),
+          bottomRadius * Math.sin(angle),
+          netHeight,
+        ),
+      ]);
 
-    // Add to rim
-    this.rim.add(netMesh);
+      // Create tube geometry along the curve
+      const tubeGeometry = new THREE.TubeGeometry(
+        curve,
+        16, // Segments along the curve
+        0.008, // Radius of the rope strand
+        4, // Radial segments
+        false,
+      );
+
+      const strand = new THREE.Mesh(tubeGeometry, strandMaterial);
+      netGroup.add(strand);
+    }
+
+    // Create horizontal connecting loops
+    for (let loop = 0; loop < numHorizontalLoops; loop++) {
+      const t = (loop + 1) / (numHorizontalLoops + 1);
+      const zPos = netHeight * t; // Using positive Z for depth
+
+      // Interpolate radius based on the taper
+      let loopRadius;
+      if (t < 0.3) {
+        loopRadius = rimRadius * (1 + 0.05 * (t / 0.3));
+      } else if (t < 0.65) {
+        const localT = (t - 0.3) / 0.35;
+        loopRadius = rimRadius * (1.05 - 0.2 * localT);
+      } else {
+        const localT = (t - 0.65) / 0.35;
+        loopRadius = rimRadius * (0.85 - 0.25 * localT);
+      }
+
+      // Create points for the horizontal loop
+      const loopPoints = [];
+      for (let i = 0; i <= numVerticalStrands; i++) {
+        const angle = (i / numVerticalStrands) * Math.PI * 2;
+        loopPoints.push(
+          new THREE.Vector3(
+            loopRadius * Math.cos(angle),
+            loopRadius * Math.sin(angle),
+            zPos,
+          ),
+        );
+      }
+
+      // Create curve and tube for horizontal loop
+      const loopCurve = new THREE.CatmullRomCurve3(loopPoints);
+      loopCurve.closed = true;
+
+      const loopGeometry = new THREE.TubeGeometry(
+        loopCurve,
+        numVerticalStrands,
+        0.006, // Slightly thinner than vertical strands
+        4,
+        true, // Closed loop
+      );
+
+      const loopMesh = new THREE.Mesh(loopGeometry, strandMaterial);
+      netGroup.add(loopMesh);
+    }
+
+    // Add the net group to the rim
+    this.rim.add(netGroup);
 
     // Store reference
-    this.net = netMesh;
+    this.net = netGroup;
 
-    return netMesh;
+    return netGroup;
   }
 
   createTriggerZone() {
@@ -307,8 +389,11 @@ export class Hoop {
     }
 
     if (this.net) {
-      if (this.net.geometry) this.net.geometry.dispose();
-      if (this.net.material) this.net.material.dispose();
+      // Net is now a group, dispose all children
+      this.net.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      });
     }
 
     if (this.triggerZone) {

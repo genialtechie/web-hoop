@@ -43,10 +43,10 @@ export class Basketball {
         linearDamping: 0.3, // Less linear damping for better movement
       },
       {
-        phong: {
+        standard: {
           color,
-          shininess: 10,
-          specular: 0x111111,
+          roughness: 0.9,
+          metalness: 0.1,
         },
       },
     );
@@ -71,23 +71,79 @@ export class Basketball {
   }
 
   addTexture() {
-    // This could be enhanced with a proper basketball texture
-    // For now, we'll create a simple pattern to represent the basketball
-    // Commented out to avoid linter errors - would be used in a full implementation
-    // const geometry = new THREE.SphereGeometry(this.config.radius, 32, 32);
-    // const textureLoader = new THREE.TextureLoader();
-    // Load a basketball texture (this would be a placeholder until you have a real texture)
-    // For now, we'll keep using the material from physics factory
-    // Note: In a real implementation, you would load a texture file
-    // Example of how you would add the texture if you had one:
-    // textureLoader.load('/path/to/basketball-texture.jpg', (texture) => {
-    //   this.mesh.material = new THREE.MeshStandardMaterial({
-    //     map: texture,
-    //     color: this.config.color,
-    //     roughness: 0.8,
-    //     metalness: 0.1
-    //   });
-    // });
+    // Add basketball stripes/lines using a group of thin torus shapes
+    const stripeGroup = new THREE.Group();
+    const stripeMaterial = new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.95,
+      metalness: 0,
+      emissive: 0x000000,
+    });
+
+    const { radius } = this.config;
+
+    // Create the classic basketball seam pattern with 4 curved lines
+    // forming a symmetrical pattern around the ball
+
+    // Create 4 curved seams rotated around the Y axis
+    for (let i = 0; i < 4; i++) {
+      const curve = this.createCurvedSeam(
+        radius,
+        (i * Math.PI) / 2,
+        stripeMaterial,
+      );
+      stripeGroup.add(curve);
+    }
+
+    // Add subtle bumps texture to the main ball surface
+    if (this.mesh.material) {
+      this.mesh.material.roughness = 0.85;
+      this.mesh.material.metalness = 0.05;
+    }
+
+    // Add the stripe group to the basketball
+    this.mesh.add(stripeGroup);
+  }
+
+  createCurvedSeam(radius, yRotation, material) {
+    // Create a curved seam using flat boxes that sit flush on the surface
+    const group = new THREE.Group();
+    const segments = 64;
+    const seamWidth = radius * 0.035;
+    const seamHeight = radius * 0.005; // Very thin height
+
+    for (let i = 0; i < segments; i++) {
+      const t = i / (segments - 1);
+      // Create a sine wave curve from -90° to +90°
+      const phi = (t - 0.5) * Math.PI; // -90° to +90°
+      const theta = Math.sin(phi * 1.5) * (Math.PI / 3); // Curved path
+
+      // Calculate position on sphere surface (flush with surface)
+      const x = Math.sin(theta) * Math.cos(phi) * radius;
+      const y = Math.sin(phi) * radius;
+      const z = Math.cos(theta) * Math.cos(phi) * radius;
+
+      // Create small flat segment
+      const segment = new THREE.Mesh(
+        new THREE.BoxGeometry(seamWidth, seamHeight, radius * 0.08),
+        material,
+      );
+
+      segment.position.set(x, y, z);
+
+      // Orient segment to follow the curve and sit on surface
+      const normal = new THREE.Vector3(x, y, z).normalize();
+      segment.lookAt(
+        segment.position.x + normal.x,
+        segment.position.y + normal.y,
+        segment.position.z + normal.z,
+      );
+
+      group.add(segment);
+    }
+
+    group.rotation.y = yRotation;
+    return group;
   }
 
   /**
