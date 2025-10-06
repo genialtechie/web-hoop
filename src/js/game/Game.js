@@ -179,14 +179,19 @@ export class Game {
     this.soundManager = new SoundManager();
     this.effectsManager = new EffectsManager(this.scene);
 
-    // Initialize sound on first user interaction
-    window.addEventListener(
-      "click",
-      () => {
-        if (this.soundManager) this.soundManager.init();
-      },
-      { once: true },
-    );
+    // Initialize sound on first user interaction (handles Safari)
+    const initAudio = () => {
+      if (this.soundManager) {
+        this.soundManager.init().then(() => {
+          console.log("Audio initialized successfully");
+        });
+      }
+    };
+
+    // Listen for both click and touch events for maximum compatibility
+    window.addEventListener("click", initAudio, { once: true });
+    window.addEventListener("touchstart", initAudio, { once: true });
+    this.canvas.addEventListener("touchstart", initAudio, { once: true });
 
     // Start game loop after physics is initialized
     this.isInitialized = true;
