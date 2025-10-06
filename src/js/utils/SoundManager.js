@@ -9,46 +9,23 @@ export class SoundManager {
     this.initialized = false;
   }
 
-  async init() {
+  init() {
     if (this.initialized) return;
 
     try {
       this.audioContext = new (window.AudioContext ||
         window.webkitAudioContext)();
-
-      // Resume audio context (required for Safari)
-      if (this.audioContext.state === "suspended") {
-        await this.audioContext.resume();
-      }
-
       this.initialized = true;
-      console.log("SoundManager initialized", this.audioContext.state);
+      console.log("SoundManager initialized");
     } catch (error) {
       console.warn("Web Audio API not supported:", error);
       this.enabled = false;
     }
   }
 
-  // Ensure audio context is resumed (Safari can suspend it)
-  async ensureResumed() {
-    if (!this.audioContext) return false;
-
-    if (this.audioContext.state === "suspended") {
-      try {
-        await this.audioContext.resume();
-      } catch (error) {
-        console.warn("Failed to resume audio context:", error);
-        return false;
-      }
-    }
-
-    return this.audioContext.state === "running";
-  }
-
   // Play basketball bounce sound
-  async playBounce(intensity = 0.5) {
+  playBounce(intensity = 0.5) {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const oscillator = ctx.createOscillator();
@@ -75,9 +52,8 @@ export class SoundManager {
   }
 
   // Play swish sound (perfect shot through net)
-  async playSwish() {
+  playSwish() {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
 
@@ -113,9 +89,8 @@ export class SoundManager {
   }
 
   // Play rim hit sound
-  async playRimHit(intensity = 0.7) {
+  playRimHit(intensity = 0.7) {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const oscillator = ctx.createOscillator();
@@ -148,9 +123,8 @@ export class SoundManager {
   }
 
   // Play score celebration sound
-  async playScore(streak = 1) {
+  playScore(streak = 1) {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 chord
@@ -183,9 +157,8 @@ export class SoundManager {
   }
 
   // Play crowd cheer for streaks
-  async playCheer(streak) {
+  playCheer(streak) {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const duration = Math.min(0.5 + streak * 0.1, 1.5);
@@ -224,9 +197,8 @@ export class SoundManager {
   }
 
   // Play miss sound (sad trombone)
-  async playMiss() {
+  playMiss() {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const oscillator = ctx.createOscillator();
@@ -252,9 +224,8 @@ export class SoundManager {
   }
 
   // Play release sound when starting to aim
-  async playRelease() {
+  playRelease() {
     if (!this.enabled || !this.initialized) return;
-    await this.ensureResumed();
 
     const ctx = this.audioContext;
     const oscillator = ctx.createOscillator();
