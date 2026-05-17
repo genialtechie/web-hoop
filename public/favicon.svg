@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="hoopzy.fun">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="24" x2="448" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#26333b" />
+      <stop offset="0.55" stop-color="#10171c" />
+      <stop offset="1" stop-color="#06090c" />
+    </linearGradient>
+    <radialGradient id="ball" cx="36%" cy="30%" r="72%">
+      <stop offset="0" stop-color="#e98936" />
+      <stop offset="0.48" stop-color="#bd4f1c" />
+      <stop offset="1" stop-color="#5e1b0d" />
+    </radialGradient>
+    <linearGradient id="rim" x1="286" y1="160" x2="440" y2="218" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff9d38" />
+      <stop offset="1" stop-color="#82250e" />
+    </linearGradient>
+    <linearGradient id="trail" x1="142" y1="360" x2="363" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="0.4" stop-color="#2ee6d6" />
+      <stop offset="1" stop-color="#ffffff" />
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000000" flood-opacity="0.38" />
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="url(#bg)" />
+  <path d="M78 430 C142 250 247 151 380 86" fill="none" stroke="#ffffff" stroke-width="72" stroke-linecap="round" opacity="0.14" />
+  <path d="M104 402 C170 246 255 154 378 98" fill="none" stroke="url(#trail)" stroke-width="42" stroke-linecap="round" filter="url(#glow)" />
+  <path d="M330 106 L410 106 L410 164 L330 164 Z" fill="#d8d0c4" stroke="#eef4f7" stroke-width="10" stroke-linejoin="round" filter="url(#shadow)" />
+  <path d="M356 124 L384 124 L384 149 L356 149 Z" fill="none" stroke="#f15f43" stroke-width="8" stroke-linejoin="round" />
+  <ellipse cx="370" cy="180" rx="74" ry="20" fill="url(#rim)" stroke="#3b1208" stroke-width="8" filter="url(#shadow)" />
+  <path d="M306 186 C319 253 421 253 435 186" fill="none" stroke="#edf5f7" stroke-width="9" stroke-linecap="round" opacity="0.72" />
+  <path d="M322 194 L344 260 M351 197 L360 269 M374 198 L374 270 M397 197 L388 269 M426 194 L404 260" fill="none" stroke="#1d2930" stroke-width="5" stroke-linecap="round" opacity="0.46" />
+
+  <g filter="url(#shadow)">
+    <circle cx="183" cy="333" r="121" fill="url(#ball)" stroke="#210d08" stroke-width="14" />
+    <path d="M65 323 C120 284 220 286 300 354" fill="none" stroke="#1b0b07" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+    <path d="M104 232 C157 290 169 379 129 438" fill="none" stroke="#1b0b07" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+    <path d="M238 226 C180 288 176 382 241 440" fill="none" stroke="#1b0b07" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+    <path d="M70 377 C130 409 232 407 299 349" fill="none" stroke="#1b0b07" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+  </g>
+</svg>
