@@ -74,25 +74,28 @@ export class EffectsManager {
 
   // Create confetti for streaks
   createConfetti(position, streak) {
-    const particleCount = Math.min(20 + streak * 10, 100);
+    const particleCount = Math.min(18 + streak * 6, 64);
     const geometry = new THREE.BufferGeometry();
     const positions = [];
     const velocities = [];
     const colors = [];
 
-    // Colorful confetti
-    const confettiColors = [
-      0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffa500,
-    ];
+    const confettiColors = [0xffd24a, 0xff5a2a, 0xffffff, 0x2ee6d6, 0xff2f6d];
 
     for (let i = 0; i < particleCount; i++) {
-      positions.push(position.x, position.y, position.z);
+      const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.45;
+      const radius = Math.random() * 0.16;
 
-      // Spread out velocities
+      positions.push(
+        position.x + Math.cos(angle) * radius,
+        position.y + (Math.random() - 0.2) * 0.08,
+        position.z + Math.sin(angle) * radius,
+      );
+
       velocities.push(
-        (Math.random() - 0.5) * 0.3,
-        Math.random() * 0.3 + 0.1,
-        (Math.random() - 0.5) * 0.3,
+        Math.cos(angle) * (0.055 + Math.random() * 0.09),
+        0.08 + Math.random() * 0.15,
+        Math.sin(angle) * (0.055 + Math.random() * 0.09),
       );
 
       const color = new THREE.Color(
@@ -108,10 +111,11 @@ export class EffectsManager {
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-      size: 0.2,
+      size: 0.12,
       vertexColors: true,
       transparent: true,
       opacity: 1,
+      blending: THREE.AdditiveBlending,
     });
 
     const particles = new THREE.Points(geometry, material);
@@ -131,7 +135,7 @@ export class EffectsManager {
       geometry.dispose();
       material.dispose();
       this.particles = this.particles.filter((p) => p.mesh !== particles);
-    }, 2000);
+    }, 1300);
   }
 
   // Create ball trail effect

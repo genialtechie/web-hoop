@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <link rel="stylesheet" href="./src/style.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Basketball Swipe Game</title>
   </head>
   <body>
@@ -12,6 +15,278 @@
       <canvas id="game-canvas"></canvas>
       <div id="ui-container">
         <div id="score">Score: 0</div>
+        <div id="timer" class="timer">60</div>
+      </div>
+      <div id="shot-label-layer" class="shot-label-layer"></div>
+      <div id="start-screen" class="start-screen">
+        <div class="start-content">
+          <h1>Web Hoop</h1>
+          <div
+            class="tutorial-stage"
+            role="img"
+            aria-label="Swipe up from the ball to shoot"
+          >
+            <svg class="swipe-graphic" viewBox="0 0 320 300" aria-hidden="true">
+              <defs>
+                <linearGradient id="swipe-ball" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#d77428" />
+                  <stop offset="0.52" stop-color="#a84617" />
+                  <stop offset="1" stop-color="#69210f" />
+                </linearGradient>
+                <linearGradient id="swipe-rim" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#ff8d30" />
+                  <stop offset="1" stop-color="#8e2e11" />
+                </linearGradient>
+                <linearGradient id="swipe-hand" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffffff" />
+                  <stop offset="1" stop-color="#dfe8ec" />
+                </linearGradient>
+                <filter
+                  id="swipe-shadow"
+                  x="-30%"
+                  y="-30%"
+                  width="160%"
+                  height="160%"
+                >
+                  <feDropShadow
+                    dx="0"
+                    dy="10"
+                    stdDeviation="8"
+                    flood-color="#000000"
+                    flood-opacity="0.32"
+                  />
+                </filter>
+                <filter
+                  id="swipe-glow"
+                  x="-60%"
+                  y="-60%"
+                  width="220%"
+                  height="220%"
+                >
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <g class="tutorial-hoop" filter="url(#swipe-shadow)">
+                <rect
+                  x="102"
+                  y="34"
+                  width="116"
+                  height="70"
+                  rx="4"
+                  fill="#d8d0c4"
+                  opacity="0.92"
+                />
+                <rect
+                  x="137"
+                  y="51"
+                  width="46"
+                  height="33"
+                  rx="2"
+                  fill="none"
+                  stroke="#f2684d"
+                  stroke-width="3"
+                />
+                <ellipse
+                  cx="160"
+                  cy="107"
+                  rx="43"
+                  ry="9"
+                  fill="url(#swipe-rim)"
+                />
+                <path
+                  d="M122 110 C132 151 188 151 198 110"
+                  fill="none"
+                  stroke="#dfe8ec"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  opacity="0.72"
+                />
+                <path
+                  d="M132 113 L143 150 M146 114 L152 153 M160 115 L160 154 M174 114 L168 153 M188 113 L177 150"
+                  fill="none"
+                  stroke="#1c242a"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  opacity="0.42"
+                />
+              </g>
+
+              <path
+                class="shot-arc"
+                d="M158 235 C171 186 198 145 170 104"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="5"
+                stroke-linecap="round"
+                filter="url(#swipe-glow)"
+              />
+              <path
+                class="swipe-trail"
+                d="M154 246 C150 218 153 189 166 156"
+                fill="none"
+                stroke="#2ee6d6"
+                stroke-width="8"
+                stroke-linecap="round"
+              />
+              <path
+                class="swipe-trail swipe-trail--inner"
+                d="M154 246 C150 218 153 189 166 156"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+
+              <g class="tutorial-ball" filter="url(#swipe-shadow)">
+                <ellipse
+                  cx="152"
+                  cy="258"
+                  rx="39"
+                  ry="10"
+                  fill="#000000"
+                  opacity="0.26"
+                />
+                <circle
+                  cx="154"
+                  cy="232"
+                  r="27"
+                  fill="url(#swipe-ball)"
+                  stroke="#2a110b"
+                  stroke-width="3"
+                />
+                <path
+                  d="M127 230 C139 222 166 222 181 238 M137 211 C148 223 151 245 145 257 M169 209 C158 225 158 245 171 258 M127 241 C140 248 165 248 181 237"
+                  fill="none"
+                  stroke="#20100b"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  opacity="0.9"
+                />
+              </g>
+
+              <g class="gesture-hand" filter="url(#swipe-shadow)">
+                <g transform="translate(184 204) rotate(-12)">
+                  <path
+                    d="M30 76 C17 73 8 64 9 50 C10 39 18 35 28 43 L28 17 C28 8 34 3 42 3 C50 3 55 8 55 17 L55 49 L62 37 C66 30 74 28 80 33 C86 38 86 46 81 54 L66 79 C60 89 48 94 37 90 Z"
+                    fill="url(#swipe-hand)"
+                    stroke="#172026"
+                    stroke-width="4"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M30 76 C40 80 54 80 66 72"
+                    fill="none"
+                    stroke="#97a8b0"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    opacity="0.75"
+                  />
+                  <path
+                    d="M28 45 L28 62 M55 47 L55 66"
+                    fill="none"
+                    stroke="#97a8b0"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    opacity="0.65"
+                  />
+                  <path
+                    d="M27 82 C38 90 55 90 67 80 L72 97 C57 106 34 106 19 95 Z"
+                    fill="#ffd24a"
+                    stroke="#172026"
+                    stroke-width="4"
+                    stroke-linejoin="round"
+                  />
+                </g>
+              </g>
+            </svg>
+          </div>
+
+          <div class="rule-strip" aria-label="60 seconds, 2 points per make">
+            <div class="rule-chip">
+              <svg class="rule-icon" viewBox="0 0 32 32" aria-hidden="true">
+                <circle
+                  cx="16"
+                  cy="17"
+                  r="10"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                />
+                <path
+                  d="M16 17 L16 10 M16 17 L21 20 M11 4 L21 4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span>60s</span>
+            </div>
+            <div class="rule-chip rule-chip--score">
+              <svg class="rule-icon" viewBox="0 0 32 32" aria-hidden="true">
+                <rect
+                  x="8"
+                  y="4"
+                  width="16"
+                  height="12"
+                  rx="2"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                />
+                <ellipse
+                  cx="16"
+                  cy="17"
+                  rx="9"
+                  ry="3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                />
+                <path
+                  d="M10 19 C12 27 20 27 22 19"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span>+2</span>
+            </div>
+          </div>
+
+          <div id="result-panel" class="result-panel" aria-live="polite">
+            <div id="result-badge" class="result-badge">Run</div>
+            <div id="final-score" class="final-score">0</div>
+            <div class="final-best">Best <span id="final-best">0</span></div>
+          </div>
+
+          <button id="start-button" type="button">
+            <span class="button-icon button-icon--play" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M8 5 L18 12 L8 19 Z" />
+              </svg>
+            </span>
+            <span class="button-icon button-icon--replay" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M18.5 9.5 C17.4 6.8 14.8 5 11.8 5 C8 5 5 8 5 11.8 C5 15.6 8 18.6 11.8 18.6 C14.3 18.6 16.5 17.3 17.7 15.3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.6"
+                  stroke-linecap="round"
+                />
+                <path d="M18.8 4.5 L18.8 9.8 L13.5 9.8 Z" />
+              </svg>
+            </span>
+            <span id="start-button-label">Start</span>
+          </button>
+        </div>
       </div>
     </div>
     <script type="module" src="./src/js/main.js"></script>

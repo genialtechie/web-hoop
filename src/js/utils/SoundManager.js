@@ -1,260 +1,193 @@
+const SFX_SOURCES = {
+  score: "/audio/correct.mp3",
+  streak: "/audio/streak.mp3",
+  highScore: "/audio/high-score.mp3",
+  miss: "/audio/wrong-short.mp3",
+};
+
+const MUSIC_SOURCE = "/audio/bg-loop.mp3";
+const SILENCE_SOURCE = "/audio/silence.mp3";
+
 export class SoundManager {
   constructor() {
-    // Create audio context
-    this.audioContext = null;
-    this.masterVolume = 0.3;
+    this.masterVolume = 0.55;
+    this.musicVolume = 0.26;
     this.enabled = true;
-
-    // Initialize on user interaction (required by browsers)
     this.initialized = false;
+    this.musicShouldPlay = false;
+    this.lastMusicResumeAttempt = 0;
+
+    this.sfxAudio = this.createAudio(SILENCE_SOURCE, this.masterVolume);
+    this.musicAudio = this.createAudio(MUSIC_SOURCE, this.musicVolume);
+    this.musicAudio.loop = true;
   }
 
   init() {
-    if (this.initialized) return;
-
-    try {
-      this.audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)();
-      this.initialized = true;
-      console.log("SoundManager initialized");
-    } catch (error) {
-      console.warn("Web Audio API not supported:", error);
-      this.enabled = false;
-    }
+    return this.unlock();
   }
 
-  // Play basketball bounce sound
-  playBounce(intensity = 0.5) {
-    if (!this.enabled || !this.initialized) return;
+  createAudio(src, volume) {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.playsInline = true;
+    audio.volume = volume;
+    return audio;
+  }
 
-    const ctx = this.audioContext;
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+  unlock() {
+    if (!this.enabled) return false;
+    if (this.initialized) return true;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    this.initialized = true;
+    this.unlockSfxChannel();
+    return true;
+  }
 
-    // Lower frequency for bounce sound
-    oscillator.frequency.setValueAtTime(100, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      40,
-      ctx.currentTime + 0.1,
+  unlockSfxChannel() {
+    this.sfxAudio.pause();
+    this.sfxAudio.src = SILENCE_SOURCE;
+    this.sfxAudio.currentTime = 0;
+    this.sfxAudio.muted = false;
+    this.sfxAudio.volume = 0;
+
+    const playResult = this.sfxAudio.play();
+    if (!playResult || typeof playResult.then !== "function") {
+      this.finishSfxUnlock();
+      return;
+    }
+
+    playResult
+      .then(() => {
+        this.finishSfxUnlock();
+      })
+      .catch((error) => {
+        console.warn("Unable to unlock SFX channel:", error);
+        this.finishSfxUnlock();
+      });
+  }
+
+  finishSfxUnlock() {
+    this.sfxAudio.pause();
+    this.sfxAudio.currentTime = 0;
+    this.sfxAudio.muted = false;
+    this.sfxAudio.volume = this.masterVolume;
+  }
+
+  play(name, volumeScale = 1) {
+    if (!this.enabled) return;
+    if (!this.initialized) this.unlock();
+
+    const src = SFX_SOURCES[name];
+    if (!src) return;
+
+    this.sfxAudio.pause();
+    this.sfxAudio.src = src;
+    this.sfxAudio.currentTime = 0;
+    this.sfxAudio.muted = false;
+    this.sfxAudio.volume = Math.max(
+      0,
+      Math.min(1, this.masterVolume * volumeScale),
     );
 
-    // Volume envelope
-    const volume = this.masterVolume * intensity * 0.3;
-    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    const playResult = this.sfxAudio.play();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch((error) => {
+        console.warn(`Unable to play ${name} sound:`, error);
+      });
+    }
 
-    oscillator.type = "sine";
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.15);
+    this.resumeMusicSoon();
   }
 
-  // Play swish sound (perfect shot through net)
+  playBounce() {
+    // Disabled for now: the bounce asset was too noisy during gameplay.
+  }
+
   playSwish() {
-    if (!this.enabled || !this.initialized) return;
-
-    const ctx = this.audioContext;
-
-    // Create white noise for swish
-    const bufferSize = ctx.sampleRate * 0.3;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.3;
-    }
-
-    const noise = ctx.createBufferSource();
-    const filter = ctx.createBiquadFilter();
-    const gainNode = ctx.createGain();
-
-    noise.buffer = buffer;
-    noise.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    // High-pass filter for swish sound
-    filter.type = "highpass";
-    filter.frequency.setValueAtTime(2000, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(6000, ctx.currentTime + 0.2);
-
-    // Volume envelope
-    gainNode.gain.setValueAtTime(this.masterVolume * 0.4, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-
-    noise.start(ctx.currentTime);
-    noise.stop(ctx.currentTime + 0.3);
+    // Disabled for now: score feedback uses one clear made-shot sound.
   }
 
-  // Play rim hit sound
-  playRimHit(intensity = 0.7) {
-    if (!this.enabled || !this.initialized) return;
-
-    const ctx = this.audioContext;
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-
-    oscillator.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    // Metallic clank sound
-    oscillator.frequency.setValueAtTime(400, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      150,
-      ctx.currentTime + 0.08,
-    );
-
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(800, ctx.currentTime);
-    filter.Q.setValueAtTime(5, ctx.currentTime);
-
-    // Sharp attack, quick decay
-    const volume = this.masterVolume * intensity * 0.5;
-    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-
-    oscillator.type = "square";
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.12);
+  playRimHit() {
+    // Disabled for now: keep impact feedback visual only.
   }
 
-  // Play score celebration sound
   playScore(streak = 1) {
-    if (!this.enabled || !this.initialized) return;
-
-    const ctx = this.audioContext;
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 chord
-
-    notes.forEach((freq, index) => {
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      oscillator.frequency.setValueAtTime(freq, ctx.currentTime);
-      oscillator.type = "sine";
-
-      const startTime = ctx.currentTime + index * 0.05;
-      const volume = this.masterVolume * 0.3;
-
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
-
-      oscillator.start(startTime);
-      oscillator.stop(startTime + 0.4);
-    });
-
-    // Extra celebration for streaks
-    if (streak >= 3) {
-      this.playCheer(streak);
-    }
+    this.play(streak >= 3 ? "streak" : "score", streak >= 3 ? 0.9 : 0.75);
   }
 
-  // Play crowd cheer for streaks
-  playCheer(streak) {
-    if (!this.enabled || !this.initialized) return;
-
-    const ctx = this.audioContext;
-    const duration = Math.min(0.5 + streak * 0.1, 1.5);
-
-    // Create crowd noise
-    const bufferSize = ctx.sampleRate * duration;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.5;
-    }
-
-    const noise = ctx.createBufferSource();
-    const filter = ctx.createBiquadFilter();
-    const gainNode = ctx.createGain();
-
-    noise.buffer = buffer;
-    noise.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    // Band-pass filter for human voice range
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(1000, ctx.currentTime);
-    filter.Q.setValueAtTime(1, ctx.currentTime);
-
-    // Volume swell
-    const volume = this.masterVolume * Math.min(0.2 + streak * 0.05, 0.5);
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.1);
-    gainNode.gain.linearRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-    noise.start(ctx.currentTime);
-    noise.stop(ctx.currentTime + duration);
+  playCheer() {
+    this.play("streak", 0.9);
   }
 
-  // Play miss sound (sad trombone)
+  playHighScore() {
+    this.play("highScore", 0.95);
+  }
+
   playMiss() {
-    if (!this.enabled || !this.initialized) return;
-
-    const ctx = this.audioContext;
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    // Descending tone
-    oscillator.frequency.setValueAtTime(220, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      110,
-      ctx.currentTime + 0.5,
-    );
-
-    const volume = this.masterVolume * 0.2;
-    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-
-    oscillator.type = "sawtooth";
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.5);
+    this.play("miss", 0.8);
   }
 
-  // Play release sound when starting to aim
   playRelease() {
-    if (!this.enabled || !this.initialized) return;
+    // Disabled: Start and shot release should not create extra audio clutter.
+  }
 
-    const ctx = this.audioContext;
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+  playMusic() {
+    if (!this.enabled) return;
+    if (!this.initialized) this.unlock();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    this.musicShouldPlay = true;
+    this.musicAudio.muted = false;
+    this.musicAudio.volume = this.musicVolume;
 
-    oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      400,
-      ctx.currentTime + 0.05,
-    );
+    const playResult = this.musicAudio.play();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch((error) => {
+        console.warn("Unable to play background music:", error);
+      });
+    }
+  }
 
-    const volume = this.masterVolume * 0.15;
-    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+  stopMusic() {
+    this.musicShouldPlay = false;
+    this.musicAudio.pause();
+    this.musicAudio.currentTime = 0;
+  }
 
-    oscillator.type = "sine";
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.05);
+  ensureMusicPlaying() {
+    if (!this.enabled || !this.initialized || !this.musicShouldPlay) return;
+    if (!this.musicAudio.paused && !this.musicAudio.ended) return;
+
+    const now = performance.now();
+    if (now - this.lastMusicResumeAttempt < 700) return;
+
+    this.lastMusicResumeAttempt = now;
+    this.playMusic();
+  }
+
+  resumeMusicSoon() {
+    if (!this.musicShouldPlay) return;
+
+    setTimeout(() => {
+      this.ensureMusicPlaying();
+    }, 80);
+  }
+
+  setMusicVolume(volume) {
+    this.musicVolume = Math.max(0, Math.min(1, volume));
+    this.musicAudio.volume = this.musicVolume;
   }
 
   setVolume(volume) {
     this.masterVolume = Math.max(0, Math.min(1, volume));
+    this.sfxAudio.volume = this.masterVolume;
   }
 
   toggle() {
     this.enabled = !this.enabled;
+    if (!this.enabled) {
+      this.stopMusic();
+      this.sfxAudio.pause();
+    }
     return this.enabled;
   }
 }

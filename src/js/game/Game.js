@@ -11,10 +11,21 @@ export class Game {
   constructor() {
     // Canvas element
     this.canvas = document.getElementById("game-canvas");
+    this.startScreen = document.getElementById("start-screen");
+    this.startButton = document.getElementById("start-button");
+    this.startButtonLabel = document.getElementById("start-button-label");
+    this.resultBadgeElement = document.getElementById("result-badge");
+    this.finalScoreElement = document.getElementById("final-score");
+    this.finalBestElement = document.getElementById("final-best");
+    this.timerElement = document.getElementById("timer");
+    this.shotLabelLayer = document.getElementById("shot-label-layer");
 
     // Three.js components
     this.scene = null;
     this.camera = null;
+    this.cameraBasePosition = new THREE.Vector3();
+    this.cameraLookAtTarget = new THREE.Vector3(0, 2.5, -3);
+    this.cameraShake = null;
     this.renderer = null;
     this.physics = null;
 
@@ -22,7 +33,18 @@ export class Game {
     this.basketball = null;
     this.hoop = null;
     this.inputManager = null;
-    this.soundManager = null;
+    this.soundManager = new SoundManager();
+    this.audioUnlockEvents = [
+      "pointerdown",
+      "pointerup",
+      "touchstart",
+      "touchend",
+      "mousedown",
+      "mouseup",
+      "click",
+      "keydown",
+    ];
+    this.startEvents = ["pointerdown", "touchstart", "mousedown", "click"];
     this.effectsManager = null;
     this.ballTrail = null;
 
@@ -35,23 +57,44 @@ export class Game {
     this.highScore = this.loadHighScore();
     this.streak = 0; // Current streak of successful baskets
     this.gameState = "IDLE"; // IDLE, AIMING, SHOOTING, SCORED, RESET
+    this.roundState = "READY"; // READY, RUNNING, ENDED
+    this.roundDuration = 60;
+    this.timeRemaining = this.roundDuration;
     this.pendingReset = false; // Flag to track if a reset is already scheduled
+    this.hasStarted = !this.startScreen;
     this.shotStartTime = 0; // Track when a shot starts
-    this.maxShotTime = 2000; // Maximum time for a shot (2 seconds)
+    this.maxShotTime = 1500; // Maximum time for a shot (1.5 seconds)
     this.resetDelay = 800; // Shorter reset delay (800ms)
+    this.pointsPerMake = 2;
+    this.currentShot = null;
+    this.lastBallPosition = null; // Previous frame position used for rim-plane scoring
 
     // Initialize score display
     this.updateScoreDisplay();
+    this.updateTimerDisplay();
+    this.updateStartScreen("READY");
 
     // Bind methods
     this.update = this.update.bind(this);
     this.handleResize = this.handleResize.bind(this);
     this.initPhysics = this.initPhysics.bind(this);
     this.handleSwipe = this.handleSwipe.bind(this);
+    this.handleStart = this.handleStart.bind(this);
+    this.handleAudioUnlock = this.handleAudioUnlock.bind(this);
     this.testShot = this.testShot.bind(this);
+
+    if (this.startButton) {
+      this.startEvents.forEach((eventName) => {
+        this.startButton.addEventListener(eventName, this.handleStart, {
+          passive: false,
+        });
+      });
+    }
 
     // Add keyboard listener for test shot
     window.addEventListener("keydown", (e) => {
+      this.handleAudioUnlock();
+
       if (e.key === " ") {
         // Space bar
         this.testShot();
@@ -102,6 +145,116 @@ export class Game {
     }
   }
 
+  updateTimerDisplay() {
+    if (!this.timerElement) return;
+
+    const seconds = Math.max(0, Math.ceil(this.timeRemaining));
+    this.timerElement.textContent = seconds.toString().padStart(2, "0");
+    this.timerElement.classList.toggle(
+      "is-warning",
+      this.roundState === "RUNNING" && seconds <= 10,
+    );
+  }
+
+  updateStartScreen(mode = this.roundState) {
+    if (!this.startButton) return;
+
+    const isEnded = mode === "ENDED";
+
+    if (this.startScreen) {
+      this.startScreen.classList.toggle("is-ended", isEnded);
+    }
+
+    if (this.finalScoreElement) {
+      this.finalScoreElement.textContent = this.score.toString();
+    }
+    if (this.finalBestElement) {
+      this.finalBestElement.textContent = this.highScore.toString();
+    }
+    if (this.resultBadgeElement) {
+      this.resultBadgeElement.textContent = this.getRunResultLabel();
+    }
+
+    if (this.startButtonLabel) {
+      this.startButtonLabel.textContent = isEnded ? "Play Again" : "Start";
+    } else {
+      this.startButton.textContent = isEnded ? "Play Again" : "Start";
+    }
+  }
+
+  getRunResultLabel() {
+    if (this.score <= 0) return "Try Again";
+    if (this.score >= this.highScore && this.highScore > 0) return "Best Run";
+    if (this.score >= 30) return "Heat Check";
+    if (this.score >= 20) return "Hot Run";
+    if (this.score >= 10) return "Nice Touch";
+    return "On Board";
+  }
+
+  hideStartScreen() {
+    if (!this.startScreen) return;
+
+    this.startScreen.classList.add("is-hidden");
+    this.startScreen.setAttribute("aria-hidden", "true");
+  }
+
+  showStartScreen(mode = this.roundState) {
+    this.updateStartScreen(mode);
+
+    if (!this.startScreen) return;
+
+    this.startScreen.classList.remove("is-hidden");
+    this.startScreen.setAttribute("aria-hidden", "false");
+  }
+
+  startRound() {
+    this.score = 0;
+    this.streak = 0;
+    this.timeRemaining = this.roundDuration;
+    this.roundState = "RUNNING";
+    this.gameState = "IDLE";
+    this.pendingReset = false;
+    this.hasStarted = true;
+    this.currentShot = null;
+    this.lastBallPosition = null;
+
+    if (this.basketball) {
+      this.basketball.reset({ x: 0, y: 1.5, z: 0 });
+    }
+
+    this.updateScoreDisplay();
+    this.updateTimerDisplay();
+    this.hideStartScreen();
+
+    if (this.soundManager) {
+      this.soundManager.playMusic();
+    }
+  }
+
+  endRound() {
+    if (this.roundState === "ENDED") return;
+
+    this.roundState = "ENDED";
+    this.hasStarted = false;
+    this.pendingReset = false;
+    this.currentShot = null;
+    this.lastBallPosition = null;
+    this.gameState = "ROUND_OVER";
+
+    if (this.ballTrail && this.effectsManager) {
+      this.effectsManager.clearBallTrail(this.ballTrail);
+      this.ballTrail = null;
+    }
+
+    if (this.basketball) {
+      this.basketball.reset({ x: 0, y: 1.5, z: 0 });
+    }
+
+    this.updateScoreDisplay();
+    this.updateTimerDisplay();
+    this.showStartScreen("ENDED");
+  }
+
   init() {
     if (this.isInitialized) return;
 
@@ -113,19 +266,17 @@ export class Game {
   }
 
   initGraphics() {
+    const { width, height } = this.getViewportSize();
+
     // Create scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87ceeb); // Sky blue
 
     // Create camera
-    this.camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000,
-    );
+    this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     this.camera.position.set(0, 2.5, 4); // Moved closer to the hoop
-    this.camera.lookAt(0, 2.5, -3); // Look towards the hoop
+    this.cameraBasePosition.copy(this.camera.position);
+    this.camera.lookAt(this.cameraLookAtTarget); // Look towards the hoop
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -133,7 +284,7 @@ export class Game {
       antialias: true,
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height, false);
     this.renderer.shadowMap.enabled = true;
 
     // Add lights
@@ -141,6 +292,25 @@ export class Game {
 
     // Add event listeners
     window.addEventListener("resize", this.handleResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", this.handleResize);
+    }
+  }
+
+  getViewportSize() {
+    const width =
+      this.canvas?.clientWidth ||
+      window.visualViewport?.width ||
+      window.innerWidth;
+    const height =
+      this.canvas?.clientHeight ||
+      window.visualViewport?.height ||
+      window.innerHeight;
+
+    return {
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height)),
+    };
   }
 
   initPhysics() {
@@ -176,17 +346,8 @@ export class Game {
     this.setupInputManager();
 
     // Initialize sound and effects managers
-    this.soundManager = new SoundManager();
+    this.setupAudioUnlockEvents();
     this.effectsManager = new EffectsManager(this.scene);
-
-    // Initialize sound on first user interaction
-    window.addEventListener(
-      "click",
-      () => {
-        if (this.soundManager) this.soundManager.init();
-      },
-      { once: true },
-    );
 
     // Start game loop after physics is initialized
     this.isInitialized = true;
@@ -410,6 +571,7 @@ export class Game {
       strength: 4, // Reduced for more controlled shots
       showTrajectory: true,
       onSwipe: this.handleSwipe,
+      onInteractionStart: this.handleAudioUnlock,
     });
 
     // Add trajectory line to scene if it exists
@@ -419,9 +581,39 @@ export class Game {
     }
   }
 
+  setupAudioUnlockEvents() {
+    this.audioUnlockEvents.forEach((eventName) => {
+      window.addEventListener(eventName, this.handleAudioUnlock, {
+        once: true,
+        passive: true,
+      });
+    });
+  }
+
+  handleAudioUnlock() {
+    if (this.soundManager) {
+      this.soundManager.unlock();
+    }
+  }
+
+  handleStart(event) {
+    if (event) event.preventDefault();
+    if (this.roundState === "RUNNING") return;
+
+    this.handleAudioUnlock();
+
+    this.startRound();
+  }
+
   handleSwipe(force, isPreview = false) {
     // Only allow shooting if the ball is not already in motion
-    if (this.gameState !== "SHOOTING" && this.basketball) {
+    if (
+      this.hasStarted &&
+      this.roundState === "RUNNING" &&
+      this.gameState !== "SHOOTING" &&
+      !this.pendingReset &&
+      this.basketball
+    ) {
       // Calculate distance to hoop for force adjustment
       const ballPos = this.basketball.getPosition();
       const hoopPos = new THREE.Vector3(0, 3.05, -5); // Hoop position
@@ -451,6 +643,8 @@ export class Game {
         this.gameState = "AIMING";
       } else {
         // Actually shoot the ball
+        this.startShotTracking();
+        this.lastBallPosition = this.basketball.getPosition();
         this.basketball.applyForce(modifiedForce);
         this.gameState = "SHOOTING";
 
@@ -459,9 +653,6 @@ export class Game {
 
         // Hide the trajectory line
         this.inputManager.hideTrajectoryLine();
-
-        // Play release sound
-        if (this.soundManager) this.soundManager.playRelease();
 
         // Create ball trail effect
         if (this.effectsManager) {
@@ -475,12 +666,190 @@ export class Game {
     }
   }
 
+  updateRound(delta) {
+    if (this.roundState !== "RUNNING") return;
+
+    this.timeRemaining = Math.max(0, this.timeRemaining - delta / 1000);
+    this.updateTimerDisplay();
+
+    if (this.timeRemaining <= 0) {
+      this.endRound();
+    }
+  }
+
+  startShotTracking() {
+    const ballPosition = this.basketball.getPosition();
+
+    this.currentShot = {
+      hitBackboard: false,
+      hitRim: false,
+      lastImpactTime: 0,
+      maxHeight: ballPosition.y,
+    };
+  }
+
+  updateShotTracking() {
+    if (
+      this.roundState !== "RUNNING" ||
+      this.gameState !== "SHOOTING" ||
+      !this.currentShot ||
+      !this.basketball ||
+      !this.hoop
+    ) {
+      return;
+    }
+
+    const position = this.basketball.getPosition();
+    const velocity = this.basketball.getVelocity();
+    const speed = velocity.length();
+    const ballRadius = this.basketball.config.radius;
+
+    this.currentShot.maxHeight = Math.max(
+      this.currentShot.maxHeight,
+      position.y,
+    );
+
+    if (speed < 0.35) return;
+
+    const now = performance.now();
+    if (now - this.currentShot.lastImpactTime < 220) return;
+
+    if (this.isNearRimImpact(position, ballRadius)) {
+      this.currentShot.hitRim = true;
+      this.currentShot.lastImpactTime = now;
+      this.triggerCameraShake(Math.min(1, speed / 10), 170);
+      return;
+    }
+
+    if (this.isNearBackboardImpact(position, ballRadius)) {
+      this.currentShot.hitBackboard = true;
+      this.currentShot.lastImpactTime = now;
+      this.triggerCameraShake(Math.min(1.25, speed / 8), 210);
+    }
+  }
+
+  isNearRimImpact(position, ballRadius) {
+    if (!this.hoop || !this.hoop.rim) return false;
+
+    const rimCenter = new THREE.Vector3();
+    this.hoop.rim.getWorldPosition(rimCenter);
+
+    const dx = position.x - rimCenter.x;
+    const dz = position.z - rimCenter.z;
+    const distanceFromCenter = Math.sqrt(dx * dx + dz * dz);
+    const distanceFromRing = Math.abs(
+      distanceFromCenter - this.hoop.config.rimRadius,
+    );
+    const isNearPlane = Math.abs(position.y - rimCenter.y) <= ballRadius * 1.35;
+
+    return isNearPlane && distanceFromRing <= ballRadius * 0.7;
+  }
+
+  isNearBackboardImpact(position, ballRadius) {
+    if (!this.hoop) return false;
+
+    const { config } = this.hoop;
+    const backboardX = config.position.x;
+    const backboardY =
+      config.position.y + (config.backboardHeight / 2 - config.rimRadius);
+    const backboardZ =
+      config.position.z -
+      config.backboardDistFromRim -
+      config.backboardThickness / 2;
+
+    const isNearPlane = Math.abs(position.z - backboardZ) <= ballRadius * 1.15;
+    const isWithinWidth =
+      Math.abs(position.x - backboardX) <=
+      config.backboardWidth / 2 + ballRadius;
+    const isWithinHeight =
+      Math.abs(position.y - backboardY) <=
+      config.backboardHeight / 2 + ballRadius;
+
+    return isNearPlane && isWithinWidth && isWithinHeight;
+  }
+
+  getShotLabel(scored, missReason = "") {
+    if (scored) {
+      if (this.currentShot?.hitBackboard) return "BANK";
+      if (this.currentShot?.hitRim) return "SHOOTER'S BOUNCE";
+      return "SWISH";
+    }
+
+    if (!this.currentShot?.hitBackboard && !this.currentShot?.hitRim) {
+      return missReason === "shotTimeExceeded" ? "SHORT" : "AIRBALL";
+    }
+
+    return "BRICK";
+  }
+
+  showShotLabel(text, tone = "made") {
+    if (!this.shotLabelLayer || !this.camera) return;
+
+    const hoopPosition = new THREE.Vector3(0, 3.55, -5);
+    hoopPosition.project(this.camera);
+    const { width, height } = this.getViewportSize();
+
+    const label = document.createElement("div");
+    label.className = `shot-label shot-label--${tone}`;
+    label.textContent = text;
+    label.style.left = `${(hoopPosition.x * 0.5 + 0.5) * width}px`;
+    label.style.top = `${(-hoopPosition.y * 0.5 + 0.5) * height}px`;
+
+    this.shotLabelLayer.appendChild(label);
+
+    setTimeout(() => {
+      label.remove();
+    }, 900);
+  }
+
+  triggerCameraShake(intensity = 0.5, duration = 180) {
+    if (!this.camera) return;
+
+    const currentIntensity = this.cameraShake?.intensity || 0;
+    this.cameraShake = {
+      duration,
+      elapsed: 0,
+      intensity: Math.max(currentIntensity, intensity),
+    };
+  }
+
+  updateCameraShake(delta) {
+    if (!this.camera) return;
+
+    if (!this.cameraShake) {
+      this.camera.position.copy(this.cameraBasePosition);
+      this.camera.lookAt(this.cameraLookAtTarget);
+      return;
+    }
+
+    this.cameraShake.elapsed += delta;
+    const progress = Math.min(
+      1,
+      this.cameraShake.elapsed / this.cameraShake.duration,
+    );
+    const amplitude = this.cameraShake.intensity * (1 - progress) * 0.05;
+
+    this.camera.position.set(
+      this.cameraBasePosition.x + (Math.random() - 0.5) * amplitude,
+      this.cameraBasePosition.y + (Math.random() - 0.5) * amplitude,
+      this.cameraBasePosition.z + (Math.random() - 0.5) * amplitude,
+    );
+    this.camera.lookAt(this.cameraLookAtTarget);
+
+    if (progress >= 1) {
+      this.cameraShake = null;
+      this.camera.position.copy(this.cameraBasePosition);
+      this.camera.lookAt(this.cameraLookAtTarget);
+    }
+  }
+
   update() {
     this.animationFrameId = requestAnimationFrame(this.update);
 
     // Update physics if initialized
     if (this.physics) {
       const delta = this.clock.getDelta() * 1000;
+      this.updateRound(delta);
       this.physics.update(delta);
       this.physics.updateDebugger();
 
@@ -501,11 +870,21 @@ export class Game {
         }
       }
 
-      // Check for basket made
-      this.checkForBasket();
+      this.updateShotTracking();
 
-      // Check ball state
-      this.checkBallState();
+      if (this.roundState === "RUNNING") {
+        // Check for basket made
+        this.checkForBasket();
+
+        // Check ball state
+        this.checkBallState();
+      }
+
+      this.updateCameraShake(delta);
+
+      if (this.soundManager) {
+        this.soundManager.ensureMusicPlaying();
+      }
     }
 
     // Render the scene
@@ -524,16 +903,32 @@ export class Game {
     ) {
       // Get the ball's velocity to ensure it's moving downward through the hoop
       const velocity = this.basketball.getVelocity();
+      const currentPosition = this.basketball.getPosition();
+
+      if (!this.lastBallPosition) {
+        this.lastBallPosition = currentPosition;
+        return;
+      }
 
       // Check if ball is passing through the hoop from top to bottom
-      if (velocity.y < 0 && this.hoop.checkBasket(this.basketball.mesh)) {
+      const scored =
+        velocity.y < 0 &&
+        this.hoop.checkBasket(this.basketball.mesh, this.lastBallPosition);
+
+      this.lastBallPosition = currentPosition;
+
+      if (scored) {
+        const points = this.pointsPerMake;
+        const shotLabel = this.getShotLabel(true);
+
         // Increment score
-        this.score++;
+        this.score += points;
 
         // Increment streak
         this.streak++;
 
         // Check for high score
+        const isNewHighScore = this.score > this.highScore;
         if (this.score > this.highScore) {
           this.highScore = this.score;
           this.saveHighScore();
@@ -549,12 +944,15 @@ export class Game {
         this.pendingReset = true;
 
         // Play success sound and visual effects
-        this.showScoreEffect();
+        this.showScoreEffect(points, shotLabel);
 
         // Play score sound
         if (this.soundManager) {
-          this.soundManager.playSwish();
-          this.soundManager.playScore(this.streak);
+          if (isNewHighScore && this.score > points) {
+            this.soundManager.playHighScore();
+          } else {
+            this.soundManager.playScore(this.streak);
+          }
         }
 
         // Create visual effects
@@ -576,7 +974,7 @@ export class Game {
         }
 
         setTimeout(() => {
-          if (this.gameState === "SCORED") {
+          if (this.gameState === "SCORED" && this.roundState === "RUNNING") {
             this.resetBasketball();
           }
         }, this.resetDelay);
@@ -589,6 +987,8 @@ export class Game {
     try {
       console.log("Resetting basketball after score...");
       this.basketball.reset({ x: 0, y: 1.5, z: 0 }); // Moved closer to the hoop
+      this.currentShot = null;
+      this.lastBallPosition = null;
       this.gameState = "IDLE";
     } catch (error) {
       console.error("Error during reset after score:", error);
@@ -599,35 +999,8 @@ export class Game {
   }
 
   // Show a visual effect when scoring
-  showScoreEffect() {
-    // Create a simple text popup at the score location
-    const scorePopup = document.createElement("div");
-    scorePopup.textContent = "+1";
-    scorePopup.style.position = "absolute";
-    scorePopup.style.color = "#ffcc00";
-    scorePopup.style.fontSize = "36px";
-    scorePopup.style.fontWeight = "bold";
-    scorePopup.style.textShadow = "2px 2px 4px rgba(0, 0, 0, 0.7)";
-    scorePopup.style.top = "100px";
-    scorePopup.style.left = "50%";
-    scorePopup.style.transform = "translateX(-50%)";
-    scorePopup.style.pointerEvents = "none";
-    scorePopup.style.zIndex = "100";
-    scorePopup.style.opacity = "1";
-    scorePopup.style.transition = "all 1s ease-out";
-
-    document.body.appendChild(scorePopup);
-
-    // Animate the popup
-    setTimeout(() => {
-      scorePopup.style.opacity = "0";
-      scorePopup.style.top = "50px";
-
-      // Remove the element after animation
-      setTimeout(() => {
-        document.body.removeChild(scorePopup);
-      }, 1000);
-    }, 50);
+  showScoreEffect(points, shotLabel) {
+    this.showShotLabel(`${shotLabel} +${points}`, "made");
   }
 
   checkBallState() {
@@ -652,6 +1025,15 @@ export class Game {
       const shotTimeExceeded = shotTime > this.maxShotTime;
 
       if (isTooFar || isBelowGround || hasStopped || shotTimeExceeded) {
+        const missReason = isTooFar
+          ? "isTooFar"
+          : isBelowGround
+            ? "isBelowGround"
+            : hasStopped
+              ? "hasStopped"
+              : "shotTimeExceeded";
+        const missLabel = this.getShotLabel(false, missReason);
+
         // Set the pending reset flag to prevent multiple reset attempts
         this.pendingReset = true;
 
@@ -663,6 +1045,7 @@ export class Game {
 
         // Update the score display to show the reset streak
         this.updateScoreDisplay();
+        this.showShotLabel(missLabel, "miss");
 
         // Play miss sound
         if (this.soundManager) this.soundManager.playMiss();
@@ -675,10 +1058,12 @@ export class Game {
 
         // Reset the ball after a shorter delay
         delay(this.resetDelay).then(() => {
-          if (this.basketball) {
+          if (this.basketball && this.roundState === "RUNNING") {
             try {
               console.log("Resetting basketball...");
               this.basketball.reset({ x: 0, y: 1.5, z: 0 }); // Moved closer to the hoop
+              this.currentShot = null;
+              this.lastBallPosition = null;
               this.gameState = "IDLE";
             } catch (error) {
               console.error("Error during reset:", error);
@@ -693,12 +1078,16 @@ export class Game {
   }
 
   handleResize() {
+    if (!this.camera || !this.renderer) return;
+
+    const { width, height } = this.getViewportSize();
+
     // Update camera aspect ratio
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
 
     // Update renderer size
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height, false);
   }
 
   dispose() {
@@ -708,6 +1097,17 @@ export class Game {
     }
 
     window.removeEventListener("resize", this.handleResize);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", this.handleResize);
+    }
+    this.audioUnlockEvents.forEach((eventName) => {
+      window.removeEventListener(eventName, this.handleAudioUnlock);
+    });
+    if (this.startButton) {
+      this.startEvents.forEach((eventName) => {
+        this.startButton.removeEventListener(eventName, this.handleStart);
+      });
+    }
 
     // Dispose of Three.js resources
     this.renderer.dispose();
@@ -737,7 +1137,11 @@ export class Game {
   }
 
   testShot() {
-    if (this.gameState !== "SHOOTING" && this.basketball) {
+    if (
+      this.roundState === "RUNNING" &&
+      this.gameState !== "SHOOTING" &&
+      this.basketball
+    ) {
       console.log("Taking test shot...");
 
       // Position the ball right on the backboard's top edge
@@ -758,6 +1162,8 @@ export class Game {
 
       // Apply the force after a brief delay to let physics settle
       setTimeout(() => {
+        this.startShotTracking();
+        this.lastBallPosition = this.basketball.getPosition();
         this.basketball.applyForce(force);
         this.gameState = "SHOOTING";
         console.log("Drop force applied:", force);

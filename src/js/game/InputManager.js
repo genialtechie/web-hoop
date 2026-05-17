@@ -8,6 +8,7 @@ export class InputManager {
     this.strength = this.options.strength || 10;
     this.showTrajectory = this.options.showTrajectory || false;
     this.onSwipe = this.options.onSwipe || function () {};
+    this.onInteractionStart = this.options.onInteractionStart || function () {};
 
     // Swipe handling properties
     this.startPoint = new THREE.Vector2();
@@ -48,8 +49,9 @@ export class InputManager {
   }
 
   handleTouchStart(event) {
-    event.preventDefault();
     if (event.touches.length === 1) {
+      this.onInteractionStart();
+      event.preventDefault();
       this.startPoint.set(event.touches[0].clientX, event.touches[0].clientY);
       this.isSwiping = true;
     }
@@ -88,6 +90,7 @@ export class InputManager {
   }
 
   handleMouseDown(event) {
+    this.onInteractionStart();
     this.startPoint.set(event.clientX, event.clientY);
     this.isSwiping = true;
   }

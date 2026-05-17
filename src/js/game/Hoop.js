@@ -329,8 +329,9 @@ export class Hoop {
     // Create mesh
     const triggerMesh = new THREE.Mesh(geometry, material);
 
-    // Position the trigger zone below the rim
-    triggerMesh.position.y = -0.05; // Moved closer to the rim (was -0.1)
+    // The rim mesh is rotated, so rotate this child back onto the horizontal
+    // rim plane. Scoring itself uses position crossing math in checkBasket().
+    triggerMesh.rotation.x = Math.PI / 2;
 
     // Add to rim
     this.rim.add(triggerMesh);
@@ -344,21 +345,47 @@ export class Hoop {
   /**
    * Check if a ball has passed through the hoop
    * @param {THREE.Object3D} ball The ball to check
+   * @param {THREE.Vector3} previousPosition Ball position from the previous frame
    * @returns {boolean} True if the ball passed through the hoop
    */
-  checkBasket(ball) {
-    // Convert ball position to local space of the trigger zone
-    const ballLocalPos = this.triggerZone.worldToLocal(ball.position.clone());
+  checkBasket(ball, previousPosition) {
+    if (!ball || !previousPosition || !this.rim) return false;
 
-    // Check if ball is within the trigger zone's radius and height
-    const isWithinRadius =
-      Math.sqrt(
-        ballLocalPos.x * ballLocalPos.x + ballLocalPos.z * ballLocalPos.z,
-      ) <
-      this.config.rimRadius * 0.8;
-    const isWithinHeight = Math.abs(ballLocalPos.y) < 0.15; // Increased detection height (was 0.1)
+    const rimCenter = new THREE.Vector3();
+    this.rim.getWorldPosition(rimCenter);
 
-    return isWithinRadius && isWithinHeight;
+    const currentPosition = ball.position.clone();
+    const movedDown = previousPosition.y > currentPosition.y;
+    const crossedRimPlane =
+      previousPosition.y >= rimCenter.y && currentPosition.y <= rimCenter.y;
+
+    if (!movedDown || !crossedRimPlane) return false;
+
+    const travelY = previousPosition.y - currentPosition.y;
+    if (travelY === 0) return false;
+
+    const crossingT = THREE.MathUtils.clamp(
+      (previousPosition.y - rimCenter.y) / travelY,
+      0,
+      1,
+    );
+
+    const crossingX = THREE.MathUtils.lerp(
+      previousPosition.x,
+      currentPosition.x,
+      crossingT,
+    );
+    const crossingZ = THREE.MathUtils.lerp(
+      previousPosition.z,
+      currentPosition.z,
+      crossingT,
+    );
+
+    const dx = crossingX - rimCenter.x;
+    const dz = crossingZ - rimCenter.z;
+    const scoringRadius = this.config.rimRadius * 0.8;
+
+    return dx * dx + dz * dz < scoringRadius * scoringRadius;
   }
 
   /**
