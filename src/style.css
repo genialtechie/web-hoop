@@ -602,3 +602,199 @@ button {
     stroke-dashoffset: 0;
   }
 }
+
+/* Arcade menu: pixel type, neon title, blinking PRESS START, CRT lines. */
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("/fonts/press-start-2p.woff2") format("woff2");
+  font-display: swap;
+}
+
+.start-screen {
+  --pixel: "Press Start 2P", ui-monospace, monospace;
+  cursor: pointer;
+  background:
+    radial-gradient(
+      120% 90% at 50% 40%,
+      rgba(6, 10, 14, 0.35),
+      rgba(3, 5, 8, 0.86)
+    ),
+    rgba(6, 10, 14, 0.45);
+}
+
+/* Scanlines over the menu only, never during play. */
+.start-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.22) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.start-content {
+  position: relative;
+  gap: clamp(14px, 2.4vh, 22px);
+}
+
+.hiscore {
+  margin: 0;
+  color: #ffd24a;
+  font-family: var(--pixel);
+  font-size: clamp(11px, 2.8vw, 14px);
+  letter-spacing: 0.08em;
+}
+
+.start-content h1.neon-title {
+  margin: 0;
+  color: #fff4e8;
+  font-family: var(--pixel);
+  font-size: clamp(34px, 11vw, 72px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 0 6px rgba(255, 141, 48, 0.95),
+    0 0 18px rgba(255, 141, 48, 0.7),
+    0 0 42px rgba(255, 141, 48, 0.45),
+    0 4px 0 #8e2e11;
+  animation: neon-on 1100ms steps(1) both;
+}
+
+.tutorial-stage {
+  width: min(62vw, 300px);
+  max-height: min(28dvh, 270px);
+}
+
+.swipe-hint {
+  margin: -6px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--pixel);
+  font-size: clamp(9px, 2.4vw, 12px);
+  letter-spacing: 0.06em;
+}
+
+.rule-chip {
+  min-width: 0;
+  min-height: 0;
+  padding: 9px 12px;
+  border-radius: 0;
+  font-family: var(--pixel);
+  font-size: clamp(10px, 2.6vw, 13px);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.rule-icon {
+  display: none;
+}
+
+.game-over {
+  color: #ff6b4a;
+  font-family: var(--pixel);
+  font-size: clamp(20px, 6.4vw, 36px);
+  line-height: 1.2;
+  text-shadow:
+    0 0 12px rgba(255, 107, 74, 0.55),
+    0 3px 0 #5a1a10;
+}
+
+.result-badge {
+  font-family: var(--pixel);
+  font-size: clamp(11px, 3vw, 15px);
+  letter-spacing: 0.06em;
+  text-shadow: none;
+}
+
+.result-badge.is-best {
+  color: #ffd24a;
+  animation: blink 900ms steps(1) infinite;
+}
+
+.final-score {
+  font-family: var(--pixel);
+  font-size: clamp(52px, 16vw, 96px);
+  line-height: 1.1;
+}
+
+.final-best {
+  font-family: var(--pixel);
+  font-size: clamp(10px, 2.6vw, 12px);
+  font-weight: 400;
+}
+
+/* PRESS START: arcade text, not a web button. Still a real button for keyboards. */
+#start-button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 0;
+  color: #ffd24a;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--pixel);
+  font-size: clamp(14px, 4vw, 20px);
+  letter-spacing: 0.06em;
+  text-shadow:
+    0 0 10px rgba(255, 210, 74, 0.55),
+    0 3px 0 #6b4108;
+  animation: blink 1000ms steps(1) infinite;
+}
+
+#start-button .button-icon {
+  display: none;
+}
+
+#start-button:active {
+  translate: 0 2px;
+  box-shadow: none;
+}
+
+#start-button:focus-visible {
+  outline: 2px solid #2ee6d6;
+  outline-offset: 4px;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The sign flickers on once, like a tube warming up. */
+@keyframes neon-on {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  18% {
+    opacity: 0.2;
+  }
+  26% {
+    opacity: 1;
+  }
+  34% {
+    opacity: 0.4;
+  }
+  44% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-content h1.neon-title,
+  .result-badge.is-best,
+  #start-button {
+    animation: none;
+  }
+}
+
+.start-screen.is-ended .swipe-hint {
+  display: none;
+}

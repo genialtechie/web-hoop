@@ -17,6 +17,8 @@ export class Game {
     this.resultBadgeElement = document.getElementById("result-badge");
     this.finalScoreElement = document.getElementById("final-score");
     this.finalBestElement = document.getElementById("final-best");
+    this.startBestElement = document.getElementById("start-best");
+    this.endedAt = 0;
     this.timerElement = document.getElementById("timer");
     this.shotLabelLayer = document.getElementById("shot-label-layer");
 
@@ -83,9 +85,11 @@ export class Game {
     this.handleAudioUnlock = this.handleAudioUnlock.bind(this);
     this.testShot = this.testShot.bind(this);
 
-    if (this.startButton) {
+    // Like an arcade cabinet, tapping anywhere on the menu starts the game.
+    const startTarget = this.startScreen || this.startButton;
+    if (startTarget) {
       this.startEvents.forEach((eventName) => {
-        this.startButton.addEventListener(eventName, this.handleStart, {
+        startTarget.addEventListener(eventName, this.handleStart, {
           passive: false,
         });
       });
@@ -93,6 +97,12 @@ export class Game {
 
     window.addEventListener("keydown", (e) => {
       this.handleAudioUnlock();
+
+      // Enter is the arcade start button.
+      if (e.key === "Enter" && this.roundState !== "RUNNING") {
+        this.handleStart(e);
+        return;
+      }
 
       // Space bar fires a test shot, in local dev only.
       if (import.meta.env.DEV && e.key === " ") {
@@ -173,24 +183,37 @@ export class Game {
     if (this.finalBestElement) {
       this.finalBestElement.textContent = this.highScore.toString();
     }
+    if (this.startBestElement) {
+      this.startBestElement.textContent = String(this.highScore).padStart(
+        3,
+        "0",
+      );
+    }
     if (this.resultBadgeElement) {
-      this.resultBadgeElement.textContent = this.getRunResultLabel();
+      const label = this.getRunResultLabel();
+      this.resultBadgeElement.textContent = label;
+      this.resultBadgeElement.classList.toggle(
+        "is-best",
+        label === "NEW HI-SCORE",
+      );
     }
 
+    const buttonText = isEnded ? "PLAY AGAIN" : "PRESS START";
     if (this.startButtonLabel) {
-      this.startButtonLabel.textContent = isEnded ? "Play Again" : "Start";
+      this.startButtonLabel.textContent = buttonText;
     } else {
-      this.startButton.textContent = isEnded ? "Play Again" : "Start";
+      this.startButton.textContent = buttonText;
     }
   }
 
   getRunResultLabel() {
-    if (this.score <= 0) return "Try Again";
-    if (this.score >= this.highScore && this.highScore > 0) return "Best Run";
-    if (this.score >= 30) return "Heat Check";
-    if (this.score >= 20) return "Hot Run";
-    if (this.score >= 10) return "Nice Touch";
-    return "On Board";
+    if (this.score <= 0) return "TRY AGAIN";
+    if (this.score >= this.highScore && this.highScore > 0)
+      return "NEW HI-SCORE";
+    if (this.score >= 30) return "HEAT CHECK";
+    if (this.score >= 20) return "HOT RUN";
+    if (this.score >= 10) return "NICE TOUCH";
+    return "ON THE BOARD";
   }
 
   hideStartScreen() {
@@ -237,6 +260,7 @@ export class Game {
     if (this.roundState === "ENDED") return;
 
     this.roundState = "ENDED";
+    this.endedAt = performance.now();
     this.hasStarted = false;
     this.pendingReset = false;
     this.currentShot = null;
@@ -599,10 +623,15 @@ export class Game {
   }
 
   handleStart(event) {
-    if (event) event.preventDefault();
+    if (event && event.cancelable) event.preventDefault();
     if (this.roundState === "RUNNING") return;
+    // A swipe that was in flight when the clock hit zero shouldn't restart the game.
+    if (this.roundState === "ENDED" && performance.now() - this.endedAt < 900) {
+      return;
+    }
 
     this.handleAudioUnlock();
+    this.soundManager?.play("coin", 0.8);
 
     this.startRound();
   }
@@ -1105,9 +1134,10 @@ export class Game {
     this.audioUnlockEvents.forEach((eventName) => {
       window.removeEventListener(eventName, this.handleAudioUnlock);
     });
-    if (this.startButton) {
+    const startTarget = this.startScreen || this.startButton;
+    if (startTarget) {
       this.startEvents.forEach((eventName) => {
-        this.startButton.removeEventListener(eventName, this.handleStart);
+        startTarget.removeEventListener(eventName, this.handleStart);
       });
     }
 

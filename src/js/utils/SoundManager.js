@@ -3,6 +3,7 @@ const SFX_SOURCES = {
   streak: "/audio/streak.mp3",
   highScore: "/audio/high-score.mp3",
   miss: "/audio/wrong-short.mp3",
+  coin: "/audio/coin.mp3",
 };
 
 const MUSIC_SOURCE = "/audio/bg-loop.mp3";
