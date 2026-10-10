@@ -91,12 +91,11 @@ export class Game {
       });
     }
 
-    // Add keyboard listener for test shot
     window.addEventListener("keydown", (e) => {
       this.handleAudioUnlock();
 
-      if (e.key === " ") {
-        // Space bar
+      // Space bar fires a test shot, in local dev only.
+      if (import.meta.env.DEV && e.key === " ") {
         this.testShot();
       }
     });
@@ -111,6 +110,9 @@ export class Game {
   // Save high score to local storage
   saveHighScore() {
     localStorage.setItem("basketballHighScore", this.highScore.toString());
+    window.dispatchEvent(
+      new CustomEvent("hoopzy:best", { detail: this.highScore }),
+    );
   }
 
   // Update the score display
