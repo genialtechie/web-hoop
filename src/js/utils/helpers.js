@@ -13,7 +13,7 @@ export function degToRad(degrees) {
  * @returns {Promise} Promise that resolves after the specified time
  */
 export function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
